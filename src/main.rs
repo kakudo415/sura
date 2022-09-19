@@ -1,88 +1,21 @@
+mod terminal;
+
 use libc;
 use std::env;
-use std::fs::File;
-use std::io::BufRead;
-use std::io::BufReader;
 use std::io::Write;
 use std::thread;
 use std::time;
 
-fn send_escape_sequence_csi(code: &str) {
-    print!("\x1B[{}", code);
-}
-
-#[cfg(any(target_os = "linux", target_os = "macos"))]
 struct Editor {
-    saved_term: libc::termios,
-    is_closing: bool,
-}
-
-#[cfg(target_os = "windows")]
-struct Editor {
+    terminal: terminal::Terminal,
     is_closing: bool,
 }
 
 impl Editor {
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
     fn new() -> Self {
-        send_escape_sequence_csi("?1049h");
-        let mut editor = Editor {
-            saved_term: libc::termios {
-                c_iflag: 0,
-                c_oflag: 0,
-                c_cflag: 0,
-                c_lflag: 0,
-                c_line: 0,
-                c_cc: [0u8; 32],
-                c_ispeed: 0,
-                c_ospeed: 0,
-            },
+        Editor {
+            terminal: terminal::Terminal::open(),
             is_closing: false,
-        };
-        editor.enable_raw_mode();
-        send_escape_sequence_csi("1;1H");
-        editor
-    }
-
-    #[cfg(target_os = "windows")]
-    fn new() -> Self {
-        todo!()
-    }
-
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
-    fn close(&mut self) {
-        self.disable_raw_mode();
-        send_escape_sequence_csi("?1049l");
-        self.is_closing = true;
-    }
-
-    #[cfg(target_os = "windows")]
-    fn close(&mut self) {
-        todo!()
-    }
-
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
-    fn enable_raw_mode(&mut self) {
-        unsafe {
-            let mut ptr = &mut self.saved_term;
-            libc::tcgetattr(0, ptr);
-        }
-        let mut termattr = self.saved_term;
-        termattr.c_lflag &= !(libc::ICANON | libc::ECHO | libc::ISIG);
-        termattr.c_cc[libc::VMIN] = 1;
-        termattr.c_cc[libc::VTIME] = 0;
-        unsafe {
-            libc::tcsetattr(0, libc::TCSANOW, &termattr);
-        }
-        unsafe {
-            libc::fcntl(0, libc::F_SETFL, libc::O_NONBLOCK);
-        }
-    }
-
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
-    fn disable_raw_mode(&self) {
-        unsafe {
-            libc::tcsetattr(0, libc::TCSANOW, &self.saved_term);
         }
     }
 
@@ -119,5 +52,5 @@ fn main() {
         editor.routine();
     }
 
-    editor.close();
+    editor.terminal.close();
 }
