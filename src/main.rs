@@ -1,6 +1,7 @@
 mod terminal;
 
 use libc;
+use std::cmp;
 use std::env;
 use std::fs::File;
 use std::io::BufRead;
@@ -58,16 +59,20 @@ impl Editor {
                                 if self.cursor.0 > 0 {
                                     self.cursor.0 -= 1;
                                 }
+                                self.cursor.1 =
+                                    cmp::min(self.cursor.1, self.lines[self.cursor.0].len());
                             }
                             // DOWN
                             66 => {
-                                if self.cursor.0 < self.lines.len() - 1 {
+                                if self.cursor.0 + 1 < self.lines.len() {
                                     self.cursor.0 += 1;
                                 }
+                                self.cursor.1 =
+                                    cmp::min(self.cursor.1, self.lines[self.cursor.0].len());
                             }
                             // RIGHT
                             67 => {
-                                if self.cursor.1 < self.lines[self.cursor.1].len() - 1 {
+                                if self.cursor.1 < self.lines[self.cursor.0].len() {
                                     self.cursor.1 += 1;
                                 }
                             }
@@ -118,6 +123,7 @@ impl Editor {
             for i in self.cursor.0..(self.lines.len() - 1) {
                 self.lines[i] = self.lines[i + 1].clone();
             }
+            self.lines.pop();
             self.cursor.0 -= 1;
             self.cursor.1 = prev_line_len;
             return;
@@ -127,17 +133,19 @@ impl Editor {
     }
 
     fn next_line(&mut self) {
-        self.lines.resize(self.lines.len() + 1, Default::default());
-        for i in ((self.cursor.0 + 1)..(self.lines.len() - 1)).rev() {
+        self.lines.push(String::new());
+        for i in ((self.cursor.0 + 1)..self.lines.len()).rev() {
             self.lines[i] = self.lines[i - 1].clone();
         }
-        let next_line_head = self.lines[self.cursor.0]
-            .char_indices()
-            .nth(self.cursor.1)
-            .unwrap()
-            .0;
-        self.lines[self.cursor.0 + 1] = self.lines[self.cursor.0][next_line_head..].to_string();
-        self.lines[self.cursor.0] = self.lines[self.cursor.0][..next_line_head].to_string();
+        match self.lines[self.cursor.0].char_indices().nth(self.cursor.1) {
+            Some((pos, _)) => {
+                self.lines[self.cursor.0 + 1] = self.lines[self.cursor.0][pos..].to_string();
+                self.lines[self.cursor.0] = self.lines[self.cursor.0][..pos].to_string();
+            }
+            None => {
+                self.lines[self.cursor.0 + 1] = String::new();
+            }
+        };
         self.cursor.0 += 1;
         self.cursor.1 = 0;
     }
