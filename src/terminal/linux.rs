@@ -32,6 +32,19 @@ impl Terminal {
         send_escape_sequence_csi("?1049l");
     }
 
+    pub fn size(&self) -> (usize, usize) {
+        let mut winsize = libc::winsize {
+            ws_row: 0,
+            ws_col: 0,
+            ws_xpixel: 0,
+            ws_ypixel: 0,
+        };
+        unsafe {
+            libc::ioctl(libc::STDOUT_FILENO, libc::TIOCGWINSZ, &mut winsize);
+        }
+        (winsize.ws_row.into(), winsize.ws_col.into())
+    }
+
     fn enable_raw_mode(&mut self) {
         unsafe {
             libc::tcgetattr(0, &mut self.default_termios);

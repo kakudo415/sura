@@ -12,4 +12,8 @@ impl Terminal {
     pub fn close(&mut self) {
         todo!()
     }
+
+    pub fn size(&self) -> (usize, usize) {
+        todo!()
+    }
 }
