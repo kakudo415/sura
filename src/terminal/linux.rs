@@ -34,13 +34,13 @@ impl Terminal {
 
     fn enable_raw_mode(&mut self) {
         unsafe {
-            let mut ptr = &mut self.default_termios;
-            libc::tcgetattr(0, ptr);
+            libc::tcgetattr(0, &mut self.default_termios);
         }
+
         let mut raw_mode_termios = self.default_termios;
-        raw_mode_termios.c_lflag &= !(libc::ICANON | libc::ECHO | libc::ISIG);
-        raw_mode_termios.c_cc[libc::VMIN] = 1;
-        raw_mode_termios.c_cc[libc::VTIME] = 0;
+        unsafe {
+            libc::cfmakeraw(&mut raw_mode_termios);
+        }
         unsafe {
             libc::tcsetattr(0, libc::TCSANOW, &raw_mode_termios);
         }
