@@ -6,6 +6,8 @@ use std::io::Write;
 use std::thread;
 use std::time;
 
+const ASCII_ESC: u32 = 27;
+
 struct Editor {
     terminal: terminal::Terminal,
     is_closing: bool,
@@ -25,12 +27,11 @@ impl Editor {
 
         let r = unsafe { libc::read(0, ptr.as_ptr() as *mut libc::c_void, 1) };
         if r > 0 {
-            let c = char::from_u32((*ptr)[0]).unwrap();
-            print!("{}", c);
-            // Exit
-            if c == 'E' {
+            if (*ptr)[0] == ASCII_ESC {
                 self.is_closing = true;
             }
+            let c = char::from_u32((*ptr)[0]).unwrap();
+            print!("{}", c);
         }
         thread::sleep(time::Duration::from_millis(16));
         std::io::stdout().flush().unwrap();
