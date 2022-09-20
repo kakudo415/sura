@@ -3,9 +3,10 @@ mod terminal;
 use libc;
 use std::cmp;
 use std::env;
-use std::fs::File;
+use std::fs;
 use std::io::BufRead;
 use std::io::BufReader;
+use std::io::BufWriter;
 use std::io::Write;
 use std::thread;
 use std::time;
@@ -15,9 +16,11 @@ const ASCII_BS: u32 = 8;
 const ASCII_CR: u32 = 13;
 const ASCII_LF: u32 = 10;
 const ASCII_DC1: u32 = 17; // ^Q
+const ASCII_DC3: u32 = 19; // ^S
 const ASCII_DEL: u32 = 127;
 
 struct Editor {
+    path: String,
     lines: Vec<String>,
     terminal: terminal::Terminal,
     cursor: (usize, usize), // (line, column)
@@ -25,13 +28,19 @@ struct Editor {
 }
 
 impl Editor {
-    fn new() -> Self {
-        Editor {
+    fn new(file_path: String) -> Self {
+        let mut editor = Editor {
+            path: file_path,
             lines: Vec::new(),
             terminal: terminal::Terminal::open(),
             cursor: (0, 0),
             is_closing: false,
+        };
+        for line in BufReader::new(fs::File::open(&editor.path).unwrap()).lines() {
+            editor.lines.push(line.unwrap());
         }
+        editor.refresh();
+        editor
     }
 
     fn routine(&mut self) {
@@ -89,6 +98,7 @@ impl Editor {
                 }
             }
             ASCII_DC1 => self.is_closing = true,
+            ASCII_DC3 => self.save(),
             ASCII_DEL => self.backspace(),
             ASCII_CR => self.next_line(),
             _ => {
@@ -161,6 +171,14 @@ impl Editor {
         terminal::move_cursor(self.cursor.0 + 1, self.cursor.1 + 1);
         std::io::stdout().flush().unwrap();
     }
+
+    fn save(&mut self) {
+        let mut writer = BufWriter::new(fs::File::create(&self.path).unwrap());
+        for line in &self.lines {
+            writer.write(line.as_bytes());
+            writer.write("\n".as_bytes());
+        }
+    }
 }
 
 fn main() {
@@ -169,13 +187,7 @@ fn main() {
         panic!("ERROR: Select the input file");
     }
 
-    let mut editor = Editor::new();
-
-    for line in BufReader::new(File::open(&args[1]).unwrap()).lines() {
-        editor.lines.push(line.unwrap());
-    }
-    editor.refresh();
-    terminal::move_cursor(1, 1);
+    let mut editor = Editor::new(args[1].to_string());
 
     loop {
         if editor.is_closing {
