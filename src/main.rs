@@ -13,6 +13,7 @@ const ASCII_ESC: u32 = 27;
 const ASCII_BS: u32 = 8;
 const ASCII_CR: u32 = 13;
 const ASCII_LF: u32 = 10;
+const ASCII_DC1: u32 = 17; // ^Q
 const ASCII_DEL: u32 = 127;
 
 struct Editor {
@@ -41,11 +42,53 @@ impl Editor {
         }
 
         match (*ptr)[0] {
-            ASCII_ESC => self.is_closing = true,
+            ASCII_ESC => {
+                if unsafe { libc::read(0, ptr.as_ptr() as *mut libc::c_void, 1) } <= 0 {
+                    return;
+                }
+                match (*ptr)[0] {
+                    // ARROW
+                    91 => {
+                        if unsafe { libc::read(0, ptr.as_ptr() as *mut libc::c_void, 1) } <= 0 {
+                            return;
+                        }
+                        match (*ptr)[0] {
+                            // UP
+                            65 => {
+                                if self.cursor.0 > 0 {
+                                    self.cursor.0 -= 1;
+                                }
+                            }
+                            // DOWN
+                            66 => {
+                                if self.cursor.0 < self.lines.len() - 1 {
+                                    self.cursor.0 += 1;
+                                }
+                            }
+                            // RIGHT
+                            67 => {
+                                if self.cursor.1 < self.lines[self.cursor.1].len() - 1 {
+                                    self.cursor.1 += 1;
+                                }
+                            }
+                            // LEFT
+                            68 => {
+                                if self.cursor.1 > 0 {
+                                    self.cursor.1 -= 1;
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            ASCII_DC1 => self.is_closing = true,
             ASCII_DEL => self.backspace(),
             ASCII_CR => self.next_line(),
             _ => {
                 let ch = char::from_u32((*ptr)[0]).unwrap();
+                eprintln!("{}", (*ptr)[0]);
                 self.insert(ch);
             }
         }
