@@ -10,6 +10,10 @@ use std::thread;
 use std::time;
 
 const ASCII_ESC: u32 = 27;
+const ASCII_BS: u32 = 8;
+const ASCII_CR: u32 = 13;
+const ASCII_LF: u32 = 10;
+const ASCII_DEL: u32 = 127;
 
 struct Editor {
     lines: Vec<String>,
@@ -38,6 +42,8 @@ impl Editor {
 
         match (*ptr)[0] {
             ASCII_ESC => self.is_closing = true,
+            ASCII_DEL => self.backspace(),
+            ASCII_CR => self.next_line(),
             _ => {
                 let ch = char::from_u32((*ptr)[0]).unwrap();
                 self.insert(ch);
@@ -53,6 +59,44 @@ impl Editor {
         }
         self.lines[self.cursor.0].insert(self.cursor.1, ch);
         self.cursor.1 += 1;
+    }
+
+    fn backspace(&mut self) {
+        if self.cursor.1 == 0 {
+            if self.cursor.0 == 0 {
+                return;
+            }
+            let prev_line_len = self.lines[self.cursor.0 - 1].len();
+            self.lines[self.cursor.0 - 1] = format!(
+                "{}{}",
+                self.lines[self.cursor.0 - 1],
+                self.lines[self.cursor.0]
+            );
+            for i in self.cursor.0..(self.lines.len() - 1) {
+                self.lines[i] = self.lines[i + 1].clone();
+            }
+            self.cursor.0 -= 1;
+            self.cursor.1 = prev_line_len;
+            return;
+        }
+        self.lines[self.cursor.0].remove(self.cursor.1 - 1);
+        self.cursor.1 -= 1;
+    }
+
+    fn next_line(&mut self) {
+        self.lines.resize(self.lines.len() + 1, Default::default());
+        for i in ((self.cursor.0 + 1)..(self.lines.len() - 1)).rev() {
+            self.lines[i] = self.lines[i - 1].clone();
+        }
+        let next_line_head = self.lines[self.cursor.0]
+            .char_indices()
+            .nth(self.cursor.1)
+            .unwrap()
+            .0;
+        self.lines[self.cursor.0 + 1] = self.lines[self.cursor.0][next_line_head..].to_string();
+        self.lines[self.cursor.0] = self.lines[self.cursor.0][..next_line_head].to_string();
+        self.cursor.0 += 1;
+        self.cursor.1 = 0;
     }
 
     fn refresh(&self) {
