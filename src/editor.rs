@@ -127,14 +127,24 @@ impl Editor {
         let window_size = self.terminal.size();
         if self.cursor.0 > window_size.0 {
             self.cursor.0 -= window_size.0;
+            if self.looking.0 > window_size.0 {
+                self.looking.0 -= window_size.0;
+            } else {
+                self.looking.0 = 0;
+            }
         } else {
             self.cursor.0 = 0;
+            self.looking.0 = 0;
         }
     }
 
     fn next_page(&mut self) {
         let window_size = self.terminal.size();
-        self.cursor.0 = cmp::min(self.cursor.0 + window_size.0, self.lines.len());
+        self.cursor.0 = cmp::min(self.cursor.0 + window_size.0, self.lines.len() - 1);
+        self.looking.0 = cmp::min(
+            self.looking.0 + window_size.0,
+            self.lines.len() - window_size.0,
+        );
     }
 
     fn refresh(&mut self) {
