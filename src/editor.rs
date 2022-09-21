@@ -148,7 +148,6 @@ impl Editor {
     }
 
     fn refresh(&mut self) {
-        terminal::clear();
         let window_size = self.terminal.size();
         if self.cursor.0 < self.looking.0 {
             self.looking.0 = self.cursor.0;
@@ -161,6 +160,7 @@ impl Editor {
             if self.looking.0 + row >= self.lines.len() {
                 break;
             }
+            terminal::clear_line();
             print!("{}", self.lines[self.looking.0 + row]);
         }
         terminal::move_cursor(self.cursor.0 - self.looking.0 + 1, self.cursor.1 + 1);
