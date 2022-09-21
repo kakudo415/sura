@@ -2,8 +2,12 @@ pub enum Events {
     BackSpace,
     CarriageReturn,
     LineFeed,
+    StartOfText,    // ^B
+    EndOfText,      // ^C
     DeviceControl1, // ^Q
     DeviceControl3, // ^S
+    ShiftOut,       // ^N
+    ShiftIn,        // ^O
     Delete,
     CursorUp,
     CursorDown,
@@ -44,8 +48,10 @@ impl Input {
         loop {
             self.read();
             match self.inner {
+                [02, 00, 00] => return Events::StartOfText,
                 [08, 00, 00] => return Events::BackSpace,
                 [13, 00, 00] => return Events::CarriageReturn,
+                [14, 00, 00] => return Events::ShiftOut,
                 [10, 00, 00] => return Events::LineFeed,
                 [17, 00, 00] => return Events::DeviceControl1,
                 [19, 00, 00] => return Events::DeviceControl3,

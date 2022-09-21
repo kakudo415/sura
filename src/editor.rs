@@ -39,6 +39,8 @@ impl Editor {
         match keys::Input::new().event() {
             keys::Events::Character(ch) => self.insert(ch),
             keys::Events::CarriageReturn => self.next_line(),
+            keys::Events::StartOfText => self.prev_page(),
+            keys::Events::ShiftOut => self.next_page(),
             keys::Events::Delete => self.backspace(),
             keys::Events::DeviceControl1 => self.is_closing = true,
             keys::Events::DeviceControl3 => self.save(),
@@ -119,6 +121,20 @@ impl Editor {
         };
         self.cursor.0 += 1;
         self.cursor.1 = 0;
+    }
+
+    fn prev_page(&mut self) {
+        let window_size = self.terminal.size();
+        if self.cursor.0 > window_size.0 {
+            self.cursor.0 -= window_size.0;
+        } else {
+            self.cursor.0 = 0;
+        }
+    }
+
+    fn next_page(&mut self) {
+        let window_size = self.terminal.size();
+        self.cursor.0 = cmp::min(self.cursor.0 + window_size.0, self.lines.len());
     }
 
     fn refresh(&mut self) {
