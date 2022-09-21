@@ -162,17 +162,23 @@ impl Editor {
         self.cursor.1 = 0;
     }
 
-    fn refresh(&self) {
+    fn refresh(&mut self) {
         terminal::clear();
         let window_size = self.terminal.size();
-        for row in 0..(window_size.0 - 1) {
+        if self.cursor.0 < self.looking.0 {
+            self.looking.0 = self.cursor.0;
+        }
+        if self.cursor.0 >= self.looking.0 + window_size.0 {
+            self.looking.0 = self.cursor.0 - window_size.0 + 1;
+        }
+        for row in 0..window_size.0 {
             terminal::move_cursor(row + 1, 1);
             if self.looking.0 + row >= self.lines.len() {
                 break;
             }
             print!("{}", self.lines[self.looking.0 + row]);
         }
-        terminal::move_cursor(self.cursor.0 + 1, self.cursor.1 + 1);
+        terminal::move_cursor(self.cursor.0 - self.looking.0 + 1, self.cursor.1 + 1);
         loop {
             match std::io::stdout().flush() {
                 Ok(_) => {
