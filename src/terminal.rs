@@ -1,7 +1,9 @@
 mod linux;
+mod macos;
 mod windows;
 
 pub use linux::*;
+pub use macos::*;
 pub use windows::*;
 
 fn send_escape_sequence_csi(code: &str) {

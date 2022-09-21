@@ -1,12 +1,12 @@
 use super::*;
 use libc;
 
-#[cfg(target_os = "linux")]
+#[cfg(target_os = "macos")]
 pub struct Terminal {
     default_termios: libc::termios,
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(target_os = "macos")]
 impl Terminal {
     pub fn open() -> Self {
         let mut editor = Terminal {
@@ -15,8 +15,7 @@ impl Terminal {
                 c_oflag: 0,
                 c_cflag: 0,
                 c_lflag: 0,
-                c_line: 0,
-                c_cc: [0u8; 32],
+                c_cc: [0u8; 20],
                 c_ispeed: 0,
                 c_ospeed: 0,
             },

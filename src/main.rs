@@ -23,7 +23,8 @@ struct Editor {
     path: String,
     lines: Vec<String>,
     terminal: terminal::Terminal,
-    cursor: (usize, usize), // (line, column)
+    cursor: (usize, usize),  // (line, column)
+    looking: (usize, usize), // Top left (line, column)
     is_closing: bool,
 }
 
@@ -34,6 +35,7 @@ impl Editor {
             lines: Vec::new(),
             terminal: terminal::Terminal::open(),
             cursor: (0, 0),
+            looking: (0, 0),
             is_closing: false,
         };
         for line in BufReader::new(fs::File::open(&editor.path).unwrap()).lines() {
@@ -162,14 +164,23 @@ impl Editor {
 
     fn refresh(&self) {
         terminal::clear();
-        let mut row = 1;
-        for line in &self.lines {
-            terminal::move_cursor(row, 1);
-            print!("{}", line);
-            row += 1;
+        let window_size = self.terminal.size();
+        for row in 0..(window_size.0 - 1) {
+            terminal::move_cursor(row + 1, 1);
+            if self.looking.0 + row >= self.lines.len() {
+                break;
+            }
+            print!("{}", self.lines[self.looking.0 + row]);
         }
         terminal::move_cursor(self.cursor.0 + 1, self.cursor.1 + 1);
-        std::io::stdout().flush().unwrap();
+        loop {
+            match std::io::stdout().flush() {
+                Ok(_) => {
+                    break;
+                }
+                Err(_) => {}
+            }
+        }
     }
 
     fn save(&mut self) {
