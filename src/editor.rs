@@ -1,4 +1,4 @@
-mod keys;
+mod input;
 
 use std::cmp;
 use std::fs;
@@ -36,32 +36,32 @@ impl Editor {
     }
 
     pub fn routine(&mut self) {
-        match keys::Input::new().event() {
-            keys::Events::Character(ch) => self.insert(ch),
-            keys::Events::CarriageReturn => self.next_line(),
-            keys::Events::StartOfText => self.prev_page(),
-            keys::Events::ShiftOut => self.next_page(),
-            keys::Events::Delete => self.backspace(),
-            keys::Events::DeviceControl1 => self.is_closing = true,
-            keys::Events::DeviceControl3 => self.save(),
-            keys::Events::CursorUp => {
+        match input::Input::new().event() {
+            input::Event::Character(ch) => self.insert(ch),
+            input::Event::CarriageReturn => self.next_line(),
+            input::Event::Ctrl('B') => self.prev_page(),
+            input::Event::Ctrl('N') => self.next_page(),
+            input::Event::Delete => self.backspace(),
+            input::Event::Ctrl('Q') => self.is_closing = true,
+            input::Event::Ctrl('S') => self.save(),
+            input::Event::CursorUp => {
                 if self.cursor.0 > 0 {
                     self.cursor.0 -= 1;
                 }
                 self.cursor.1 = cmp::min(self.cursor.1, self.lines[self.cursor.0].len());
             }
-            keys::Events::CursorDown => {
+            input::Event::CursorDown => {
                 if self.cursor.0 + 1 < self.lines.len() {
                     self.cursor.0 += 1;
                 }
                 self.cursor.1 = cmp::min(self.cursor.1, self.lines[self.cursor.0].len());
             }
-            keys::Events::CursorForward => {
+            input::Event::CursorForward => {
                 if self.cursor.1 < self.lines[self.cursor.0].len() {
                     self.cursor.1 += 1;
                 }
             }
-            keys::Events::CursorBack => {
+            input::Event::CursorBack => {
                 if self.cursor.1 > 0 {
                     self.cursor.1 -= 1;
                 }
