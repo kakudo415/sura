@@ -22,42 +22,42 @@ impl Input {
         Input { sequence: 0 }
     }
 
-    pub fn event(&mut self) -> Event {
+    pub fn event(&mut self) -> Result<Event, &str> {
         self.sequence = self.next().unwrap() as u32;
         match self.sequence {
             0x1B => match self.next().unwrap() {
                 0x5B => match self.next().unwrap() {
-                    0x41 => Event::CursorUp,
-                    0x42 => Event::CursorDown,
-                    0x43 => Event::CursorForward,
-                    0x44 => Event::CursorBack,
-                    _ => panic!("UNKNOWN ESCAPE SEQUENCE (CURSOR MOVING?)"),
+                    0x41 => Ok(Event::CursorUp),
+                    0x42 => Ok(Event::CursorDown),
+                    0x43 => Ok(Event::CursorForward),
+                    0x44 => Ok(Event::CursorBack),
+                    _ => Err("UNKNOWN ESCAPE SEQUENCE (CURSOR MOVING?)"),
                 },
-                _ => panic!("UNKNOWN ESCAPE SEQUENCE"),
+                _ => Err("UNKNOWN ESCAPE SEQUENCE"),
             },
             // Control Characters
-            0x08 => Event::BackSpace,
-            0x0A => Event::LineFeed,
-            0x0D => Event::CarriageReturn,
-            0x7F => Event::Delete,
+            0x08 => Ok(Event::BackSpace),
+            0x0A => Ok(Event::LineFeed),
+            0x0D => Ok(Event::CarriageReturn),
+            0x7F => Ok(Event::Delete),
             // Ctrl + ?
-            0x01..=0x1A => Event::Ctrl(char::from_u32(self.sequence + 0x40).unwrap()),
+            0x01..=0x1A => Ok(Event::Ctrl(char::from_u32(self.sequence + 0x40).unwrap())),
             // UTF-8 Characters
             0x20..=0x7E => {
                 // ASCII Characters
-                Event::Character(char_from_utf8_u32(self.sequence << 24))
+                Ok(Event::Character(char_from_utf8_u32(self.sequence << 24)))
             }
             0xC2..=0xDF => {
                 self.sequence <<= 8;
                 self.sequence += self.next().unwrap() as u32;
-                Event::Character(char_from_utf8_u32(self.sequence << 16))
+                Ok(Event::Character(char_from_utf8_u32(self.sequence << 16)))
             }
             0xE0..=0xEF => {
                 self.sequence <<= 8;
                 self.sequence += self.next().unwrap() as u32;
                 self.sequence <<= 8;
                 self.sequence += self.next().unwrap() as u32;
-                Event::Character(char_from_utf8_u32(self.sequence << 8))
+                Ok(Event::Character(char_from_utf8_u32(self.sequence << 8)))
             }
             0xF0..=0xF4 => {
                 self.sequence <<= 8;
@@ -66,9 +66,9 @@ impl Input {
                 self.sequence += self.next().unwrap() as u32;
                 self.sequence <<= 8;
                 self.sequence += self.next().unwrap() as u32;
-                Event::Character(char_from_utf8_u32(self.sequence))
+                Ok(Event::Character(char_from_utf8_u32(self.sequence)))
             }
-            _ => panic!("UNKNOWN INPUT"),
+            _ => Err("UNKNOWN INPUT"),
         }
     }
 }

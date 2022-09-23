@@ -8,14 +8,14 @@ use std::io::BufWriter;
 use std::io::Write;
 
 use super::terminal;
+use super::Context;
 
 pub struct Editor {
     path: String,
     lines: Vec<String>,
-    pub terminal: terminal::Terminal,
     cursor: (usize, usize),  // (line, column)
     looking: (usize, usize), // Top left (line, column)
-    pub is_closing: bool,
+    pub terminal: terminal::Terminal,
 }
 
 impl Editor {
@@ -23,10 +23,9 @@ impl Editor {
         let mut editor = Editor {
             path: file_path,
             lines: Vec::new(),
-            terminal: terminal::Terminal::open(),
             cursor: (0, 0),
             looking: (0, 0),
-            is_closing: false,
+            terminal: terminal::Terminal::open(),
         };
         for line in BufReader::new(fs::File::open(&editor.path).unwrap()).lines() {
             editor.lines.push(line.unwrap());
@@ -35,43 +34,71 @@ impl Editor {
         editor
     }
 
-    pub fn routine(&mut self) {
+    pub fn routine(&mut self) -> Context {
+        let mut context = Context {
+            is_quit: false,
+            is_modified: true,
+            is_error: false,
+        };
+
         match input::Input::new().event() {
-            input::Event::Character(ch) => self.insert(ch),
-            input::Event::CarriageReturn => self.next_line(),
-            input::Event::Ctrl('B') => self.prev_page(),
-            input::Event::Ctrl('N') => self.next_page(),
-            input::Event::Delete => self.backspace(),
-            input::Event::Ctrl('Q') => self.is_closing = true,
-            input::Event::Ctrl('S') => self.save(),
-            input::Event::CursorUp => {
+            Ok(input::Event::Character(ch)) => {
+                context.is_modified = true;
+                self.insert(ch);
+            }
+            Ok(input::Event::CarriageReturn) => {
+                context.is_modified = true;
+                self.next_line();
+            }
+            Ok(input::Event::Delete) => {
+                context.is_modified = true;
+                self.backspace();
+            }
+            Ok(input::Event::Ctrl('B')) => self.prev_page(),
+            Ok(input::Event::Ctrl('N')) => self.next_page(),
+            Ok(input::Event::Ctrl('Q')) => {
+                // TODO: Check saved or not
+                context.is_quit = true;
+            }
+            Ok(input::Event::Ctrl('S')) => {
+                context.is_modified = false;
+                self.save();
+            }
+            Ok(input::Event::CursorUp) => {
                 if self.cursor.0 > 0 {
                     self.cursor.0 -= 1;
                 }
                 self.cursor.1 = cmp::min(self.cursor.1, self.lines[self.cursor.0].len());
             }
-            input::Event::CursorDown => {
+            Ok(input::Event::CursorDown) => {
                 if self.cursor.0 + 1 < self.lines.len() {
                     self.cursor.0 += 1;
                 }
                 self.cursor.1 = cmp::min(self.cursor.1, self.lines[self.cursor.0].len());
             }
-            input::Event::CursorForward => {
+            Ok(input::Event::CursorForward) => {
                 if self.cursor.1 < self.lines[self.cursor.0].len() {
                     self.cursor.1 += 1;
                 }
             }
-            input::Event::CursorBack => {
+            Ok(input::Event::CursorBack) => {
                 if self.cursor.1 > 0 {
                     self.cursor.1 -= 1;
                 }
             }
+            Err(msg) => {
+                context.is_quit = true;
+                context.is_error = true;
+                eprintln!("INPUT EVENT ERROR: {}", msg);
+            }
             _ => {
-                panic!("EVENT ERROR!");
+                context.is_quit = true;
+                context.is_error = true;
             }
         }
 
         self.refresh();
+        return context;
     }
 
     fn insert(&mut self, ch: char) {
