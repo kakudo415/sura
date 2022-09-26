@@ -56,40 +56,20 @@ impl Editor {
                 context.is_modified = true;
                 self.backspace();
             }
-            Ok(input::Event::Ctrl('B')) => self.prev_page(),
-            Ok(input::Event::Ctrl('N')) => self.next_page(),
-            Ok(input::Event::Ctrl('Q')) => {
-                // TODO: Check saved or not
-                context.is_quit = true;
-            }
             Ok(input::Event::Ctrl('S')) => {
                 context.is_modified = false;
                 self.save();
             }
-            Ok(input::Event::CursorUp) => {
-                if self.cursor.0 > 0 {
-                    self.cursor.0 -= 1;
-                }
-                self.cursor.1 = cmp::min(self.preserved_column, self.lines[self.cursor.0].len());
+            Ok(input::Event::Ctrl('Q')) => {
+                // TODO: Check saved or not
+                context.is_quit = true;
             }
-            Ok(input::Event::CursorDown) => {
-                if self.cursor.0 + 1 < self.lines.len() {
-                    self.cursor.0 += 1;
-                }
-                self.cursor.1 = cmp::min(self.preserved_column, self.lines[self.cursor.0].len());
-            }
-            Ok(input::Event::CursorForward) => {
-                if self.cursor.1 < self.lines[self.cursor.0].len() {
-                    self.cursor.1 += 1;
-                    self.preserved_column = self.cursor.1;
-                }
-            }
-            Ok(input::Event::CursorBack) => {
-                if self.cursor.1 > 0 {
-                    self.cursor.1 -= 1;
-                    self.preserved_column = self.cursor.1;
-                }
-            }
+            Ok(input::Event::CursorUp) => self.cursor_up(),
+            Ok(input::Event::CursorDown) => self.cursor_down(),
+            Ok(input::Event::CursorForward) => self.cursor_forward(),
+            Ok(input::Event::CursorBack) => self.cursor_back(),
+            Ok(input::Event::Ctrl('B')) => self.prev_page(),
+            Ok(input::Event::Ctrl('N')) => self.next_page(),
             Err(msg) => {
                 context.is_quit = true;
                 context.is_error = true;
@@ -176,6 +156,34 @@ impl Editor {
             self.looking.0 + window_size.0,
             self.lines.len() - window_size.0,
         );
+    }
+
+    fn cursor_up(&mut self) {
+        if self.cursor.0 > 0 {
+            self.cursor.0 -= 1;
+        }
+        self.cursor.1 = cmp::min(self.preserved_column, self.lines[self.cursor.0].len());
+    }
+
+    fn cursor_down(&mut self) {
+        if self.cursor.0 + 1 < self.lines.len() {
+            self.cursor.0 += 1;
+        }
+        self.cursor.1 = cmp::min(self.preserved_column, self.lines[self.cursor.0].len());
+    }
+
+    fn cursor_forward(&mut self) {
+        if self.cursor.1 < self.lines[self.cursor.0].len() {
+            self.cursor.1 += 1;
+            self.preserved_column = self.cursor.1;
+        }
+    }
+
+    fn cursor_back(&mut self) {
+        if self.cursor.1 > 0 {
+            self.cursor.1 -= 1;
+            self.preserved_column = self.cursor.1;
+        }
     }
 
     fn refresh(&mut self) {
