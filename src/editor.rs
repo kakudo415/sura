@@ -10,13 +10,21 @@ use std::io::Write;
 use super::terminal;
 use super::Context;
 
+use input::Event;
+
 pub struct Editor {
     filepath: String,
     lines: Vec<String>,
+    mode: Mode,
     cursor: (usize, usize), // (line, column)
     preserved_column: usize,
     looking: (usize, usize), // Top left (line, column)
     pub terminal: terminal::Terminal,
+}
+
+enum Mode {
+    Normal,
+    Command,
 }
 
 impl Editor {
@@ -24,6 +32,7 @@ impl Editor {
         let mut editor = Editor {
             filepath,
             lines: Vec::new(),
+            mode: Mode::Normal,
             cursor: (0, 0),
             preserved_column: 0,
             looking: (0, 0),
@@ -44,32 +53,56 @@ impl Editor {
         };
 
         match input::Input::new().event() {
-            Ok(input::Event::Character(ch)) => {
-                context.is_modified = true;
-                self.insert(ch);
+            Ok(Event::Character(ch)) => {
+                match self.mode {
+                    Mode::Normal => {
+                        context.is_modified = true;
+                        self.insert(ch);
+                    }
+                    Mode::Command => {
+                        match ch {
+                            'h' => self.cursor_back(),
+                            'j' => self.cursor_down(),
+                            'k' => self.cursor_up(),
+                            'l' => self.cursor_forward(),
+                            'p' => self.page_forward(),
+                            'P' => self.page_back(),
+                            'w' => self.word_forward(),
+                            'W' => self.word_back(),
+                            _ => (),
+                        };
+                    }
+                };
             }
-            Ok(input::Event::CarriageReturn) => {
+
+            Ok(Event::CarriageReturn) => {
                 context.is_modified = true;
-                self.next_line();
+                self.nextline();
             }
-            Ok(input::Event::Delete) => {
+            Ok(Event::Delete) => {
                 context.is_modified = true;
                 self.backspace();
             }
-            Ok(input::Event::Ctrl('S')) => {
+
+            Ok(Event::Ctrl('F')) => {
+                match self.mode {
+                    Mode::Normal => self.mode = Mode::Command,
+                    Mode::Command => self.mode = Mode::Normal,
+                };
+            }
+            Ok(Event::Ctrl('S')) => {
                 context.is_modified = false;
                 self.save();
             }
-            Ok(input::Event::Ctrl('Q')) => {
+            Ok(Event::Ctrl('Q')) => {
                 // TODO: Check saved or not
                 context.is_trying_to_quit = true;
             }
-            Ok(input::Event::CursorUp) => self.cursor_up(),
-            Ok(input::Event::CursorDown) => self.cursor_down(),
-            Ok(input::Event::CursorForward) => self.cursor_forward(),
-            Ok(input::Event::CursorBack) => self.cursor_back(),
-            Ok(input::Event::Ctrl('B')) => self.prev_page(),
-            Ok(input::Event::Ctrl('N')) => self.next_page(),
+            Ok(Event::CursorUp) => self.cursor_up(),
+            Ok(Event::CursorDown) => self.cursor_down(),
+            Ok(Event::CursorForward) => self.cursor_forward(),
+            Ok(Event::CursorBack) => self.cursor_back(),
+
             Err(msg) => {
                 context.is_trying_to_quit = true;
                 context.is_error = true;
@@ -116,7 +149,7 @@ impl Editor {
         self.cursor.1 -= 1;
     }
 
-    fn next_line(&mut self) {
+    fn nextline(&mut self) {
         self.lines.push(String::new());
         for i in ((self.cursor.0 + 1)..self.lines.len()).rev() {
             self.lines[i] = self.lines[i - 1].clone();
@@ -132,30 +165,6 @@ impl Editor {
         };
         self.cursor.0 += 1;
         self.cursor.1 = 0;
-    }
-
-    fn prev_page(&mut self) {
-        let window_size = self.terminal.size();
-        if self.cursor.0 > window_size.0 {
-            self.cursor.0 -= window_size.0;
-            if self.looking.0 > window_size.0 {
-                self.looking.0 -= window_size.0;
-            } else {
-                self.looking.0 = 0;
-            }
-        } else {
-            self.cursor.0 = 0;
-            self.looking.0 = 0;
-        }
-    }
-
-    fn next_page(&mut self) {
-        let window_size = self.terminal.size();
-        self.cursor.0 = cmp::min(self.cursor.0 + window_size.0, self.lines.len() - 1);
-        self.looking.0 = cmp::min(
-            self.looking.0 + window_size.0,
-            self.lines.len() - window_size.0,
-        );
     }
 
     fn cursor_up(&mut self) {
@@ -184,6 +193,38 @@ impl Editor {
             self.cursor.1 -= 1;
             self.preserved_column = self.cursor.1;
         }
+    }
+
+    fn page_forward(&mut self) {
+        let window_size = self.terminal.size();
+        self.cursor.0 = cmp::min(self.cursor.0 + window_size.0, self.lines.len() - 1);
+        self.looking.0 = cmp::min(
+            self.looking.0 + window_size.0,
+            self.lines.len() - window_size.0,
+        );
+    }
+
+    fn page_back(&mut self) {
+        let window_size = self.terminal.size();
+        if self.cursor.0 > window_size.0 {
+            self.cursor.0 -= window_size.0;
+            if self.looking.0 > window_size.0 {
+                self.looking.0 -= window_size.0;
+            } else {
+                self.looking.0 = 0;
+            }
+        } else {
+            self.cursor.0 = 0;
+            self.looking.0 = 0;
+        }
+    }
+
+    fn word_forward(&mut self) {
+        todo!()
+    }
+
+    fn word_back(&mut self) {
+        todo!()
     }
 
     fn refresh(&mut self) {
