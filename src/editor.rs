@@ -13,7 +13,8 @@ use super::Context;
 pub struct Editor {
     path: String,
     lines: Vec<String>,
-    cursor: (usize, usize),  // (line, column)
+    cursor: (usize, usize), // (line, column)
+    preserved_column: usize,
     looking: (usize, usize), // Top left (line, column)
     pub terminal: terminal::Terminal,
 }
@@ -24,6 +25,7 @@ impl Editor {
             path: file_path,
             lines: Vec::new(),
             cursor: (0, 0),
+            preserved_column: 0,
             looking: (0, 0),
             terminal: terminal::Terminal::open(),
         };
@@ -68,22 +70,24 @@ impl Editor {
                 if self.cursor.0 > 0 {
                     self.cursor.0 -= 1;
                 }
-                self.cursor.1 = cmp::min(self.cursor.1, self.lines[self.cursor.0].len());
+                self.cursor.1 = cmp::min(self.preserved_column, self.lines[self.cursor.0].len());
             }
             Ok(input::Event::CursorDown) => {
                 if self.cursor.0 + 1 < self.lines.len() {
                     self.cursor.0 += 1;
                 }
-                self.cursor.1 = cmp::min(self.cursor.1, self.lines[self.cursor.0].len());
+                self.cursor.1 = cmp::min(self.preserved_column, self.lines[self.cursor.0].len());
             }
             Ok(input::Event::CursorForward) => {
                 if self.cursor.1 < self.lines[self.cursor.0].len() {
                     self.cursor.1 += 1;
+                    self.preserved_column = self.cursor.1;
                 }
             }
             Ok(input::Event::CursorBack) => {
                 if self.cursor.1 > 0 {
                     self.cursor.1 -= 1;
+                    self.preserved_column = self.cursor.1;
                 }
             }
             Err(msg) => {
