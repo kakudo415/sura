@@ -2,11 +2,9 @@ mod editor;
 mod terminal;
 
 use std::env;
-use std::thread;
-use std::time;
 
 pub struct Context {
-    is_quit: bool,
+    is_trying_to_quit: bool,
     is_modified: bool,
     is_error: bool,
 }
@@ -21,13 +19,12 @@ fn main() {
 
     loop {
         let context = editor.routine();
-        if context.is_quit {
+        if context.is_trying_to_quit {
             if context.is_error {
                 eprintln!("FATAL ERROR. QUIT.");
             }
             break;
         }
-        thread::sleep(time::Duration::from_millis(1000 / 60));
     }
 
     editor.terminal.close();

@@ -11,7 +11,7 @@ use super::terminal;
 use super::Context;
 
 pub struct Editor {
-    path: String,
+    filepath: String,
     lines: Vec<String>,
     cursor: (usize, usize), // (line, column)
     preserved_column: usize,
@@ -20,16 +20,16 @@ pub struct Editor {
 }
 
 impl Editor {
-    pub fn new(file_path: String) -> Self {
+    pub fn new(filepath: String) -> Self {
         let mut editor = Editor {
-            path: file_path,
+            filepath,
             lines: Vec::new(),
             cursor: (0, 0),
             preserved_column: 0,
             looking: (0, 0),
             terminal: terminal::Terminal::open(),
         };
-        for line in BufReader::new(fs::File::open(&editor.path).unwrap()).lines() {
+        for line in BufReader::new(fs::File::open(&editor.filepath).unwrap()).lines() {
             editor.lines.push(line.unwrap());
         }
         editor.refresh();
@@ -38,7 +38,7 @@ impl Editor {
 
     pub fn routine(&mut self) -> Context {
         let mut context = Context {
-            is_quit: false,
+            is_trying_to_quit: false,
             is_modified: true,
             is_error: false,
         };
@@ -62,7 +62,7 @@ impl Editor {
             }
             Ok(input::Event::Ctrl('Q')) => {
                 // TODO: Check saved or not
-                context.is_quit = true;
+                context.is_trying_to_quit = true;
             }
             Ok(input::Event::CursorUp) => self.cursor_up(),
             Ok(input::Event::CursorDown) => self.cursor_down(),
@@ -71,12 +71,12 @@ impl Editor {
             Ok(input::Event::Ctrl('B')) => self.prev_page(),
             Ok(input::Event::Ctrl('N')) => self.next_page(),
             Err(msg) => {
-                context.is_quit = true;
+                context.is_trying_to_quit = true;
                 context.is_error = true;
                 eprintln!("INPUT EVENT ERROR: {}", msg);
             }
             _ => {
-                context.is_quit = true;
+                context.is_trying_to_quit = true;
                 context.is_error = true;
             }
         }
@@ -214,7 +214,7 @@ impl Editor {
     }
 
     fn save(&mut self) {
-        let mut writer = BufWriter::new(fs::File::create(&self.path).unwrap());
+        let mut writer = BufWriter::new(fs::File::create(&self.filepath).unwrap());
         for line in &self.lines {
             writer.write(line.as_bytes()).unwrap();
             writer.write("\n".as_bytes()).unwrap();
