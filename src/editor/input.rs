@@ -1,3 +1,5 @@
+use nix;
+
 pub enum Event {
     BackSpace,
     CarriageReturn,
@@ -79,7 +81,7 @@ impl Iterator for Input {
     fn next(&mut self) -> Option<Self::Item> {
         let mut buffer = [0; 1];
         loop {
-            if unsafe { libc::read(0, (&mut buffer).as_ptr() as *mut libc::c_void, 1) } > 0 {
+            if nix::unistd::read(0, &mut buffer).unwrap() > 0 {
                 return Some(buffer[0]);
             }
         }

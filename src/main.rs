@@ -27,5 +27,5 @@ fn main() {
         }
     }
 
-    editor.terminal.close();
+    terminal::close();
 }

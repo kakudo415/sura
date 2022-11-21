@@ -19,7 +19,6 @@ pub struct Editor {
     cursor: (usize, usize), // (line, column)
     preserved_column: usize,
     looking: (usize, usize), // Top left (line, column)
-    pub terminal: terminal::Terminal,
 }
 
 enum Mode {
@@ -36,8 +35,8 @@ impl Editor {
             cursor: (0, 0),
             preserved_column: 0,
             looking: (0, 0),
-            terminal: terminal::Terminal::open(),
         };
+        terminal::open();
         for line in BufReader::new(fs::File::open(&editor.filepath).unwrap()).lines() {
             editor.lines.push(line.unwrap());
         }
@@ -196,7 +195,7 @@ impl Editor {
     }
 
     fn page_forward(&mut self) {
-        let window_size = self.terminal.size();
+        let window_size = terminal::size();
         self.cursor.0 = cmp::min(self.cursor.0 + window_size.0, self.lines.len() - 1);
         self.looking.0 = cmp::min(
             self.looking.0 + window_size.0,
@@ -205,7 +204,7 @@ impl Editor {
     }
 
     fn page_back(&mut self) {
-        let window_size = self.terminal.size();
+        let window_size = terminal::size();
         if self.cursor.0 > window_size.0 {
             self.cursor.0 -= window_size.0;
             if self.looking.0 > window_size.0 {
@@ -228,7 +227,7 @@ impl Editor {
     }
 
     fn refresh(&mut self) {
-        let window_size = self.terminal.size();
+        let window_size = terminal::size();
         if self.cursor.0 < self.looking.0 {
             self.looking.0 = self.cursor.0;
         }

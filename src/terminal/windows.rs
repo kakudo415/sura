@@ -1,19 +1,11 @@
-use super::*;
+pub fn raw_mode() {
+    todo!();
+}
 
-#[cfg(target_os = "windows")]
-pub struct Terminal {}
+pub fn canonical_mode() {
+    todo!();
+}
 
-#[cfg(target_os = "windows")]
-impl Terminal {
-    pub fn open() -> Self {
-        todo!()
-    }
-
-    pub fn close(&mut self) {
-        todo!()
-    }
-
-    pub fn size(&self) -> (usize, usize) {
-        todo!()
-    }
+pub fn size() -> (usize, usize) {
+    todo!();
 }
