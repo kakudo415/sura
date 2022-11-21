@@ -1,31 +1,21 @@
 mod editor;
+mod event;
 mod terminal;
+
+pub use event::*;
 
 use std::env;
 
-pub struct Context {
-    is_trying_to_quit: bool,
-    is_modified: bool,
-    is_error: bool,
-}
-
-fn main() {
+#[tokio::main]
+async fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
         panic!("ERROR: Select the input file");
     }
 
-    let mut editor = editor::Editor::new(args[1].to_string());
+    let editor = editor::Editor::new(args[1].to_string());
 
-    loop {
-        let context = editor.routine();
-        if context.is_trying_to_quit {
-            if context.is_error {
-                eprintln!("FATAL ERROR. QUIT.");
-            }
-            break;
-        }
-    }
+    tokio::join!(event::keypress_listener(editor));
 
     terminal::close();
 }

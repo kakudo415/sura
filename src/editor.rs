@@ -1,16 +1,14 @@
-mod input;
-
 use std::cmp;
 use std::fs;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::io::BufWriter;
 use std::io::Write;
+use std::process;
 
 use super::terminal;
-use super::Context;
-
-use input::Event;
+use crate::Event;
+use crate::KeyPress;
 
 pub struct Editor {
     filepath: String,
@@ -44,77 +42,61 @@ impl Editor {
         editor
     }
 
-    pub fn routine(&mut self) -> Context {
-        let mut context = Context {
-            is_trying_to_quit: false,
-            is_modified: true,
-            is_error: false,
-        };
+    pub async fn keypress_handler(&mut self, event: Event) {
+        match event {
+            Event::KeyPress(keypress) => match keypress {
+                KeyPress::Character(character) => {
+                    match self.mode {
+                        Mode::Normal => {
+                            self.insert(character);
+                        }
+                        Mode::Command => {
+                            match character {
+                                'h' => self.cursor_back(),
+                                'j' => self.cursor_down(),
+                                'k' => self.cursor_up(),
+                                'l' => self.cursor_forward(),
+                                'p' => self.page_forward(),
+                                'P' => self.page_back(),
+                                'w' => self.word_forward(),
+                                'W' => self.word_back(),
+                                _ => (),
+                            };
+                        }
+                    };
+                }
+                KeyPress::CarriageReturn => {
+                    self.nextline();
+                }
+                KeyPress::Delete => {
+                    self.backspace();
+                }
 
-        match input::Input::new().event() {
-            Ok(Event::Character(ch)) => {
-                match self.mode {
-                    Mode::Normal => {
-                        context.is_modified = true;
-                        self.insert(ch);
-                    }
-                    Mode::Command => {
-                        match ch {
-                            'h' => self.cursor_back(),
-                            'j' => self.cursor_down(),
-                            'k' => self.cursor_up(),
-                            'l' => self.cursor_forward(),
-                            'p' => self.page_forward(),
-                            'P' => self.page_back(),
-                            'w' => self.word_forward(),
-                            'W' => self.word_back(),
-                            _ => (),
-                        };
-                    }
-                };
-            }
-
-            Ok(Event::CarriageReturn) => {
-                context.is_modified = true;
-                self.nextline();
-            }
-            Ok(Event::Delete) => {
-                context.is_modified = true;
-                self.backspace();
-            }
-
-            Ok(Event::Ctrl('F')) => {
-                match self.mode {
-                    Mode::Normal => self.mode = Mode::Command,
-                    Mode::Command => self.mode = Mode::Normal,
-                };
-            }
-            Ok(Event::Ctrl('S')) => {
-                context.is_modified = false;
-                self.save();
-            }
-            Ok(Event::Ctrl('Q')) => {
-                // TODO: Check saved or not
-                context.is_trying_to_quit = true;
-            }
-            Ok(Event::CursorUp) => self.cursor_up(),
-            Ok(Event::CursorDown) => self.cursor_down(),
-            Ok(Event::CursorForward) => self.cursor_forward(),
-            Ok(Event::CursorBack) => self.cursor_back(),
-
-            Err(msg) => {
-                context.is_trying_to_quit = true;
-                context.is_error = true;
-                eprintln!("INPUT EVENT ERROR: {}", msg);
-            }
-            _ => {
-                context.is_trying_to_quit = true;
-                context.is_error = true;
-            }
+                KeyPress::Control('F') => {
+                    match self.mode {
+                        Mode::Normal => self.mode = Mode::Command,
+                        Mode::Command => self.mode = Mode::Normal,
+                    };
+                }
+                KeyPress::Control('S') => {
+                    self.save();
+                }
+                KeyPress::Control('Q') => {
+                    // TODO: Check saved or not
+                    terminal::close();
+                    process::exit(0);
+                }
+                KeyPress::CursorUp => self.cursor_up(),
+                KeyPress::CursorDown => self.cursor_down(),
+                KeyPress::CursorForward => self.cursor_forward(),
+                KeyPress::CursorBack => self.cursor_back(),
+                _ => {
+                    panic!("UNSUPPORTED KEY EVENT");
+                }
+            },
         }
 
         self.refresh();
-        return context;
     }
 
     fn insert(&mut self, ch: char) {
