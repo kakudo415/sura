@@ -12,10 +12,6 @@ pub fn send_escape_sequence_csi(code: &str) {
     print!("\x1B[{}", code);
 }
 
-pub fn clear() {
-    send_escape_sequence_csi("2J");
-}
-
 pub fn clear_line() {
     send_escape_sequence_csi("2K");
 }

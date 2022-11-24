@@ -7,8 +7,8 @@ use std::io::Write;
 use std::process;
 
 use super::terminal;
-use crate::Event;
-use crate::KeyPress;
+use crate::app::Event;
+use crate::app::KeyPress;
 
 pub struct Editor {
     filepath: String,
