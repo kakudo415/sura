@@ -7,7 +7,6 @@ use std::io::Write;
 use std::process;
 
 use super::terminal;
-use crate::app::Event;
 use crate::app::KeyPress;
 
 pub struct Editor {
@@ -42,58 +41,56 @@ impl Editor {
         editor
     }
 
-    pub async fn keypress_handler(&mut self, event: Event) {
-        match event {
-            Event::KeyPress(keypress) => match keypress {
-                KeyPress::Character(character) => {
-                    match self.mode {
-                        Mode::Normal => {
-                            self.insert(character);
-                        }
-                        Mode::Command => {
-                            match character {
-                                'h' => self.cursor_back(),
-                                'j' => self.cursor_down(),
-                                'k' => self.cursor_up(),
-                                'l' => self.cursor_forward(),
-                                'p' => self.page_forward(),
-                                'P' => self.page_back(),
-                                'w' => self.word_forward(),
-                                'W' => self.word_back(),
-                                _ => (),
-                            };
-                        }
-                    };
-                }
-                KeyPress::CarriageReturn => {
-                    self.nextline();
-                }
-                KeyPress::Delete => {
-                    self.backspace();
-                }
+    pub async fn keypress_handler(&mut self, keypress: KeyPress) {
+        match keypress {
+            KeyPress::Character(character) => {
+                match self.mode {
+                    Mode::Normal => {
+                        self.insert(character);
+                    }
+                    Mode::Command => {
+                        match character {
+                            'h' => self.cursor_back(),
+                            'j' => self.cursor_down(),
+                            'k' => self.cursor_up(),
+                            'l' => self.cursor_forward(),
+                            'p' => self.page_forward(),
+                            'P' => self.page_back(),
+                            'w' => self.word_forward(),
+                            'W' => self.word_back(),
+                            _ => (),
+                        };
+                    }
+                };
+            }
+            KeyPress::CarriageReturn => {
+                self.nextline();
+            }
+            KeyPress::Delete => {
+                self.backspace();
+            }
 
-                KeyPress::Control('F') => {
-                    match self.mode {
-                        Mode::Normal => self.mode = Mode::Command,
-                        Mode::Command => self.mode = Mode::Normal,
-                    };
-                }
-                KeyPress::Control('S') => {
-                    self.save();
-                }
-                KeyPress::Control('Q') => {
-                    // TODO: Check saved or not
-                    terminal::close();
-                    process::exit(0);
-                }
-                KeyPress::CursorUp => self.cursor_up(),
-                KeyPress::CursorDown => self.cursor_down(),
-                KeyPress::CursorForward => self.cursor_forward(),
-                KeyPress::CursorBack => self.cursor_back(),
-                _ => {
-                    panic!("UNSUPPORTED KEY EVENT");
-                }
-            },
+            KeyPress::Control('F') => {
+                match self.mode {
+                    Mode::Normal => self.mode = Mode::Command,
+                    Mode::Command => self.mode = Mode::Normal,
+                };
+            }
+            KeyPress::Control('S') => {
+                self.save();
+            }
+            KeyPress::Control('Q') => {
+                // TODO: Check saved or not
+                terminal::close();
+                process::exit(0);
+            }
+            KeyPress::CursorUp => self.cursor_up(),
+            KeyPress::CursorDown => self.cursor_down(),
+            KeyPress::CursorForward => self.cursor_forward(),
+            KeyPress::CursorBack => self.cursor_back(),
+            _ => {
+                panic!("UNSUPPORTED KEY EVENT");
+            }
         }
 
         self.refresh();

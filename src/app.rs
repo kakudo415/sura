@@ -1,16 +1,24 @@
+use serde_json::json;
 use std::env;
-use tokio::{self, io::AsyncReadExt};
+use tokio::sync::oneshot;
+use tokio::{self, sync::mpsc};
 
 use crate::editor;
+use crate::language;
+use crate::language::message;
+use crate::terminal;
 
 pub struct App {
     editors: Vec<editor::Editor>, // TODO: Support multiple editors
 }
 
+#[derive(Debug)]
 pub enum Event {
     KeyPress(KeyPress),
+    LanguageServerNotification(message::Notification),
 }
 
+#[derive(Debug)]
 pub enum KeyPress {
     BackSpace,
     CarriageReturn,
@@ -35,87 +43,58 @@ impl App {
 
     pub async fn start(&mut self) {
         let args: Vec<String> = env::args().collect();
-        if args.len() != 2 {
-            panic!("ERROR: Select the input file");
+        if args.len() != 3 {
+            panic!("ERROR: Select the input file and Choose language server");
         }
 
         let editor = editor::Editor::new(args[1].to_string());
         self.editors.push(editor);
 
-        self.listen_and_deliver_keys().await;
-    }
+        let (event_dispatcher, mut event_queue) = mpsc::channel(16);
 
-    async fn listen_and_deliver_keys(&mut self) {
-        let mut buf = [0];
+        let (language_request_sender, request_queue) = mpsc::channel(16);
+        tokio::spawn(language::start(
+            args[2].clone(),
+            event_dispatcher.clone(),
+            request_queue,
+        ));
+
+        let (tx, rx) = oneshot::channel();
+        let request =
+            crate::language::message::Request::new("initialize", json!({"capabilities": {}}));
+        language_request_sender
+            .send((language::message::ClientMessage::Request(request), tx))
+            .await
+            .unwrap();
+        let response = rx.await;
+        let (tx, _) = oneshot::channel();
+        match response {
+            Ok(_) => {
+                language_request_sender
+                    .send((
+                        language::message::ClientMessage::Notification(
+                            language::message::Notification::new("initialized", json!({})),
+                        ),
+                        tx,
+                    ))
+                    .await
+                    .unwrap();
+            }
+            Err(_) => panic!("LANGUAGE SERVER INITIALIZATION FAILED"),
+        }
+
+        tokio::spawn(terminal::listen(event_dispatcher.clone()));
+
         loop {
-            tokio::io::stdin().read(&mut buf).await.unwrap();
-            if buf[0] > 0x7F {
-                todo!(); // UTF-8
-            }
-            match buf[0] {
-                0x08 => {
-                    self.editors[0]
-                        .keypress_handler(Event::KeyPress(KeyPress::BackSpace))
-                        .await;
+            let event = event_queue.recv().await.unwrap();
+            match event {
+                Event::KeyPress(keypress) => {
+                    self.editors[0].keypress_handler(keypress).await;
                 }
-                0x0A => {
-                    self.editors[0]
-                        .keypress_handler(Event::KeyPress(KeyPress::LineFeed))
-                        .await;
-                }
-                0x0D => {
-                    self.editors[0]
-                        .keypress_handler(Event::KeyPress(KeyPress::CarriageReturn))
-                        .await;
-                }
-                0x7F => {
-                    self.editors[0]
-                        .keypress_handler(Event::KeyPress(KeyPress::Delete))
-                        .await;
-                }
-                0x1B => {
-                    self.editors[0]
-                        .keypress_handler(Event::KeyPress(read_escape_sequence().await))
-                        .await;
-                }
-                0x01..=0x1A => {
-                    self.editors[0]
-                        .keypress_handler(Event::KeyPress(KeyPress::Control(
-                            (buf[0] + 0x40) as char,
-                        )))
-                        .await;
-                }
-                0x20..=0x7E => {
-                    self.editors[0]
-                        .keypress_handler(Event::KeyPress(KeyPress::Character(buf[0] as char)))
-                        .await;
-                }
-                _ => {
-                    panic!("UNKNOWN CHARACTER");
+                Event::LanguageServerNotification(response) => {
+                    eprintln!("{}", serde_json::to_string(&response).unwrap());
                 }
             }
-        }
-    }
-}
-
-async fn read_escape_sequence() -> KeyPress {
-    let mut buf = [0];
-    tokio::io::stdin().read(&mut buf).await.unwrap();
-    match buf[0] {
-        0x5B => {
-            tokio::io::stdin().read(&mut buf).await.unwrap();
-            match buf[0] {
-                0x41 => KeyPress::CursorUp,
-                0x42 => KeyPress::CursorDown,
-                0x43 => KeyPress::CursorForward,
-                0x44 => KeyPress::CursorBack,
-                _ => {
-                    panic!("UNKNOWN ESCAPE SEQUENCE (CURSOR MOVING?)")
-                }
-            }
-        }
-        _ => {
-            panic!("UNKNOWN ESCAPE SEQUENCE");
         }
     }
 }
