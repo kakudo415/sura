@@ -7,7 +7,7 @@ Text editor. Sura Sura.
 ### Running
 
 ```
-cargo run "file path"
+cargo run "file path" "language server path"
 ```
 
 ### Keyboard commands
