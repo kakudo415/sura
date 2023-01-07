@@ -1,17 +1,13 @@
-#[cfg(unix)]
-mod unix;
-#[cfg(unix)]
-pub use unix::*;
+mod rawmode;
 
-#[cfg(windows)]
-mod windows;
-#[cfg(windows)]
-pub use windows::*;
+pub use rawmode::*;
 
-use crate::app::Event;
-use crate::app::KeyPress;
+use std::mem;
 use tokio::io::AsyncReadExt;
-use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::UnboundedSender;
+
+use crate::message::Event;
+use crate::message::KeyPress;
 
 pub fn send_escape_sequence_csi(code: &str) {
     print!("\x1B[{}", code);
@@ -35,7 +31,7 @@ pub fn close() {
     send_escape_sequence_csi("?1049l");
 }
 
-pub async fn listen(tx: Sender<Event>) {
+pub async fn listen(tx: UnboundedSender<Event>) {
     let mut buf = [0];
     loop {
         tokio::io::stdin().read(&mut buf).await.unwrap();
@@ -43,9 +39,9 @@ pub async fn listen(tx: Sender<Event>) {
             todo!(); // UTF-8
         }
         let event = match buf[0] {
-            0x08 => Event::KeyPress(KeyPress::BackSpace),
-            0x0A => Event::KeyPress(KeyPress::LineFeed),
-            0x0D => Event::KeyPress(KeyPress::CarriageReturn),
+            0x08 => Event::KeyPress(KeyPress::BS),
+            0x0A => Event::KeyPress(KeyPress::LF),
+            0x0D => Event::KeyPress(KeyPress::CR),
             0x7F => Event::KeyPress(KeyPress::Delete),
             0x1B => Event::KeyPress(read_escape_sequence().await),
             0x01..=0x1A => Event::KeyPress(KeyPress::Control((buf[0] + 0x40) as char)),
@@ -54,7 +50,7 @@ pub async fn listen(tx: Sender<Event>) {
                 panic!("UNKNOWN CHARACTER");
             }
         };
-        tx.send(event).await.unwrap();
+        tx.send(event).unwrap();
     }
 }
 
@@ -78,4 +74,16 @@ async fn read_escape_sequence() -> KeyPress {
             panic!("UNKNOWN ESCAPE SEQUENCE");
         }
     }
+}
+
+pub fn size() -> (usize, usize) {
+    let mut winsize: nix::libc::winsize = unsafe { mem::zeroed() };
+    unsafe {
+        nix::libc::ioctl(
+            nix::libc::STDOUT_FILENO,
+            nix::libc::TIOCGWINSZ,
+            &mut winsize,
+        );
+    }
+    (winsize.ws_row.into(), winsize.ws_col.into())
 }

@@ -1,4 +1,3 @@
-use std::mem;
 use std::sync::Mutex;
 
 use nix::sys::termios;
@@ -28,16 +27,4 @@ pub fn canonical_mode() {
         }
         None => {}
     }
-}
-
-pub fn size() -> (usize, usize) {
-    let mut winsize: nix::libc::winsize = unsafe { mem::zeroed() };
-    unsafe {
-        nix::libc::ioctl(
-            nix::libc::STDOUT_FILENO,
-            nix::libc::TIOCGWINSZ,
-            &mut winsize,
-        );
-    }
-    (winsize.ws_row.into(), winsize.ws_col.into())
 }

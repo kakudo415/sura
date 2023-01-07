@@ -1,82 +1,129 @@
-pub mod message;
-
-use nix::unistd;
+use nix::unistd::{close, dup2, execv, fork, pipe, ForkResult};
+use serde_json::json;
 use std::collections::HashMap;
 use std::ffi::CString;
-use std::os::unix::prelude::FromRawFd;
-use tokio::fs;
-use tokio::io::AsyncReadExt;
-use tokio::io::AsyncWriteExt;
-use tokio::sync::mpsc;
-use tokio::sync::oneshot;
+use std::os::unix::prelude::*;
+use std::sync::{Arc, Mutex};
+use tokio::fs::File;
+use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter};
+use tokio::sync::{mpsc, oneshot};
 
-pub async fn start(
-    path: String,
-    event_dispatcher: mpsc::Sender<crate::app::Event>,
-    mut request_queue: mpsc::Receiver<(message::ClientMessage, oneshot::Sender<message::Response>)>,
-) {
-    let request_pipe = unistd::pipe().unwrap();
-    let response_pipe = unistd::pipe().unwrap();
+use crate::message::*;
 
-    match unsafe { unistd::fork().unwrap() } {
-        unistd::ForkResult::Child => {
-            unistd::close(request_pipe.1).unwrap();
-            unistd::close(response_pipe.0).unwrap();
-            unistd::dup2(request_pipe.0, 0).unwrap();
-            unistd::dup2(response_pipe.1, 1).unwrap();
-            let path = CString::new(path).unwrap();
-            unistd::execv(&path, &[&path]).unwrap();
-            panic!("UNEXPECTED SERVER TERMINATION");
-        }
+pub struct Client {
+    request_writer: BufWriter<File>,
+    unreturned: Arc<Mutex<HashMap<i32, oneshot::Sender<Response>>>>,
+}
 
-        unistd::ForkResult::Parent { child: _ } => {
-            unistd::close(request_pipe.0).unwrap();
-            unistd::close(response_pipe.1).unwrap();
-            let mut request_buffer = unsafe { fs::File::from_raw_fd(request_pipe.1) };
-            let mut response_buffer = unsafe { fs::File::from_raw_fd(response_pipe.0) };
+pub async fn initialize(path: String, event_sender: mpsc::UnboundedSender<Event>) -> Client {
+    let mut client = Client::new(path, event_sender).await;
+    let response = client
+        .request(Request::new("initialize", json!({"capabilities": {}})))
+        .await;
+    client
+        .notify(Notification::new("initialized", json!({})))
+        .await;
+    client
+}
 
-            let mut sent_requests = HashMap::<i32, oneshot::Sender<message::Response>>::new();
+impl Client {
+    pub async fn new(path: String, event_sender: mpsc::UnboundedSender<Event>) -> Client {
+        let response_pipe = pipe().unwrap();
+        let request_pipe = pipe().unwrap();
+        let path = CString::new(path).expect("CString::new failed");
 
-            loop {
-                tokio::select! {
-                    response = read_response(&mut response_buffer) => {
-                        let response: message::ServerMessage = serde_json::from_str(&response).unwrap();
-                        match response {
-                            message::ServerMessage::Response(response) => {
-                                sent_requests.remove(&response.id).unwrap().send(response).unwrap(); // not sent.get() because of ownership
-                            },
-                            message::ServerMessage::Notification(notification) => {
-                                event_dispatcher.send(crate::app::Event::LanguageServerNotification(notification)).await.unwrap()
-                            }
-                        }
-                    }
-                    Some(request) = request_queue.recv() => {
-                        let tx = request.1;
-                        match request.0 {
-                            message::ClientMessage::Request(request) => {
-                                let id = request.id;
-                                send_request(&mut request_buffer, &message::ClientMessage::Request(request)).await;
-                                sent_requests.insert(id, tx);
-                            }
-                            message::ClientMessage::Notification(notification) => {
-                                send_request(&mut request_buffer, &message::ClientMessage::Notification(notification)).await;
-                            }
-                        }
-                    }
+        match unsafe { fork().unwrap() } {
+            ForkResult::Child => {
+                close(request_pipe.1).unwrap();
+                close(response_pipe.0).unwrap();
+                dup2(request_pipe.0, 0).unwrap();
+                dup2(response_pipe.1, 1).unwrap();
+                execv(&path, &[&path]).unwrap();
+                panic!("UNEXPECTED SERVER TERMINATION")
+            }
+
+            ForkResult::Parent { child: _ } => {
+                close(request_pipe.0).unwrap();
+                close(response_pipe.1).unwrap();
+                let request_channel = unsafe { File::from_raw_fd(request_pipe.1) };
+                let response_channel = unsafe { File::from_raw_fd(response_pipe.0) };
+                let unreturned = Arc::new(Mutex::new(HashMap::new()));
+
+                tokio::spawn(listen(
+                    BufReader::new(response_channel),
+                    event_sender.clone(),
+                    unreturned.clone(),
+                ));
+
+                Client {
+                    request_writer: BufWriter::new(request_channel),
+                    unreturned,
                 }
+            }
+        }
+    }
+
+    pub async fn request(&mut self, content: Request) -> Response {
+        let (response_sender, response_receiver) = oneshot::channel();
+
+        self.unreturned
+            .lock()
+            .unwrap()
+            .insert(content.id, response_sender);
+
+        let content = serde_json::to_vec(&content).unwrap();
+        self.send(content).await;
+
+        response_receiver.await.unwrap()
+    }
+
+    pub async fn notify(&mut self, content: Notification) {
+        let content = serde_json::to_vec(&content).unwrap();
+        self.send(content).await;
+    }
+
+    async fn send(&mut self, content: Vec<u8>) {
+        self.request_writer
+            .write(format!("Content-Length: {}\r\n\r\n", content.len()).as_bytes())
+            .await
+            .unwrap();
+        self.request_writer.write(&content).await.unwrap();
+        self.request_writer.flush().await.unwrap();
+    }
+}
+
+async fn listen(
+    mut response_reader: BufReader<File>,
+    event_sender: mpsc::UnboundedSender<Event>,
+    unreturned: Arc<Mutex<HashMap<i32, oneshot::Sender<Response>>>>,
+) {
+    loop {
+        let content = read_response(&mut response_reader).await;
+        let content: ServerMessage = serde_json::from_str(&content).unwrap();
+        match content {
+            ServerMessage::Response(response) => {
+                let response_id = response.id;
+                let sender: oneshot::Sender<Response> =
+                    unreturned.lock().unwrap().remove(&response_id).unwrap();
+                sender.send(response).unwrap();
+            }
+            ServerMessage::Notification(notification) => {
+                event_sender
+                    .send(Event::LanguageNotification(notification))
+                    .unwrap();
             }
         }
     }
 }
 
-async fn read_response(response_buffer: &mut fs::File) -> String {
+async fn read_response(response_buffer: &mut BufReader<File>) -> String {
     let content_length = read_response_header(response_buffer).await;
     let mut buffer = vec![0; content_length];
     response_buffer.read_exact(&mut buffer).await.unwrap();
     std::str::from_utf8(&buffer).unwrap().to_string()
 }
 
-async fn read_response_header(response_buffer: &mut fs::File) -> usize {
+async fn read_response_header(response_buffer: &mut BufReader<File>) -> usize {
     // TODO: handle Content-Type
     let mut content_length = 0;
     let mut buffer = [0; 16]; // "Content-Length: "
@@ -91,16 +138,4 @@ async fn read_response_header(response_buffer: &mut fs::File) -> usize {
         content_length = content_length * 10 + digit as usize;
     }
     content_length
-}
-
-async fn send_request(request_buffer: &mut fs::File, request: &message::ClientMessage) {
-    let raw_message = serde_json::to_string(request).unwrap();
-    let raw_message = raw_message.as_bytes();
-    request_buffer
-        .write_all(format!("Content-Length: {}\r\n\r\n", raw_message.len()).as_bytes())
-        .await
-        .unwrap();
-    request_buffer.write_all(raw_message).await.unwrap();
-
-    request_buffer.flush().await.unwrap();
 }

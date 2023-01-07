@@ -7,7 +7,7 @@ use std::io::Write;
 use std::process;
 
 use super::terminal;
-use crate::app::KeyPress;
+use crate::message::KeyPress;
 
 pub struct Editor {
     filepath: String,
@@ -63,7 +63,7 @@ impl Editor {
                     }
                 };
             }
-            KeyPress::CarriageReturn => {
+            KeyPress::CR => {
                 self.nextline();
             }
             KeyPress::Delete => {
