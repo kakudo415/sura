@@ -6,7 +6,7 @@ mod terminal;
 use std::env;
 use tokio::sync::mpsc;
 
-use message::Event;
+use message::*;
 
 #[tokio::main]
 async fn main() {
@@ -20,12 +20,17 @@ async fn main() {
     let (event_sender, mut event_queue) = mpsc::unbounded_channel();
     tokio::spawn(terminal::listen(event_sender.clone()));
 
-    let mut client = language::initialize(args[2].clone(), event_sender.clone()).await;
+    let mut client = language::initialize(args[2].clone(), event_sender.clone())
+        .await
+        .unwrap();
 
     loop {
         let event = event_queue.recv().await.unwrap();
         match event {
             Event::KeyPress(keypress) => {
+                if let KeyPress::Control('Q') = keypress {
+                    break;
+                }
                 editor.keypress_handler(keypress).await;
             }
             Event::LanguageNotification(response) => {
@@ -36,4 +41,8 @@ async fn main() {
             }
         }
     }
+
+    client.shutdown().await.unwrap();
+    terminal::close();
+    std::process::exit(0);
 }

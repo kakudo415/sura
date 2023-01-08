@@ -117,6 +117,14 @@ impl Client {
         self.request_writer.flush().await?;
         Ok(())
     }
+
+    pub async fn shutdown(&mut self) -> Result<()> {
+        self.request(Request::new("shutdown", serde_json::Value::Null))
+            .await?;
+        self.notify(Notification::new("exit", serde_json::Value::Null))
+            .await?;
+        Ok(())
+    }
 }
 
 async fn listen(
