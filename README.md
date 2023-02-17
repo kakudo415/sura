@@ -7,7 +7,20 @@ Text editor. Sura Sura.
 ### Running
 
 ```
-cargo run "file path" "language server path"
+cargo run "file path"
+```
+
+### Configuration
+
+Sura uses [XDG Base Directory](https://specifications.freedesktop.org/basedir-spec/latest/) to store a configuration file.
+
+In `$XDG_CONFIG_HOME/sura/config.json`,
+```json
+{
+    "languageServers": {
+        "language": "language server path"
+    }
+}
 ```
 
 ### Keyboard commands
