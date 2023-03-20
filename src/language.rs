@@ -125,6 +125,33 @@ impl Client {
             .await?;
         Ok(())
     }
+
+    pub async fn did_open(&mut self, language_id: &str, uri: &str, text: &str) -> Result<()> {
+        self.notify(Notification::new(
+            "textDocument/didOpen",
+            json!({
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": language_id,
+                    "version": 1,
+                    "text": text,
+                }
+            }),
+        ))
+        .await
+    }
+
+    pub async fn did_close(&mut self, uri: &str) -> Result<()> {
+        self.notify(Notification::new(
+            "textDocument/didClose",
+            json!({
+                "textDocument": {
+                    "uri": uri,
+                }
+            }),
+        ))
+        .await
+    }
 }
 
 async fn listen(

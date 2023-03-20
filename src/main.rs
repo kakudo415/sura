@@ -5,6 +5,7 @@ mod message;
 mod terminal;
 
 use std::env;
+use std::fs;
 use tokio::sync::mpsc;
 
 use message::*;
@@ -17,6 +18,7 @@ async fn main() {
     if args.len() != 2 {
         panic!("ERROR: Select the input file");
     }
+    let content = fs::read_to_string(&args[1]).unwrap();
 
     let mut editor = editor::Editor::new(args[1].to_string());
 
@@ -29,6 +31,10 @@ async fn main() {
     )
     .await
     .unwrap();
+
+    let uri = "file:///".to_string() + &args[1];
+
+    client.did_open("rust", &uri, &content).await.unwrap();
 
     loop {
         let event = event_queue.recv().await.unwrap();
@@ -47,6 +53,8 @@ async fn main() {
             }
         }
     }
+
+    client.did_close(&uri).await.unwrap();
 
     client.shutdown().await.unwrap();
     terminal::close();

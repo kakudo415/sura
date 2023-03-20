@@ -34,8 +34,11 @@ impl Editor {
             looking: (0, 0),
         };
         terminal::open();
+        let mut content = String::new();
         for line in BufReader::new(fs::File::open(&editor.filepath).unwrap()).lines() {
-            editor.lines.push(line.unwrap());
+            let line = line.unwrap();
+            content += &line;
+            editor.lines.push(line);
         }
         editor.refresh();
         editor
