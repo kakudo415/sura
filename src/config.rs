@@ -10,6 +10,16 @@ pub struct Config {
 }
 
 pub fn load() -> Result<Config> {
+    let mut config = read()?;
+
+    for (_, path) in config.language_servers.iter_mut() {
+        *path = shellexpand::full(&path)?.to_string();
+    }
+
+    anyhow::Ok(config)
+}
+
+fn read() -> Result<Config> {
     let xdg_config_home = if let Ok(home) = env::var("XDG_CONFIG_HOME") {
         home
     } else {
